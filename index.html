@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>SSH Bridge</title>
+  <link rel="stylesheet" href="xterm.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #1a1a1a; display: flex; flex-direction: column; height: 100vh; }
+    #top { padding: 8px 16px; background: #111; color: #888; font: 13px monospace; }
+    #terminal { flex: 1; padding: 4px; }
+  </style>
+</head>
+<body>
+  <div id="top">SSH Bridge — <span id="status" style="color:#f90">connecting...</span></div>
+  <div id="terminal"></div>
+  <script src="xterm.js"></script>
+  <script src="xterm-addon-fit.js"></script>
+  <script>
+    const term = new Terminal({ cursorBlink: true, theme: { background: '#1a1a1a' } });
+    const fitAddon = new FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+    term.open(document.getElementById('terminal'));
+    fitAddon.fit();
+    window.addEventListener('resize', () => fitAddon.fit());
+
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(`${proto}://${location.host}/browser`);
+    const status = document.getElementById('status');
+
+    ws.onopen = () => { status.textContent = 'connected'; status.style.color = '#0f0'; };
+    ws.onclose = () => { status.textContent = 'disconnected'; status.style.color = '#f00'; };
+    ws.onmessage = e => term.write(typeof e.data === 'string' ? e.data : new Uint8Array(e.data));
+
+    term.onData(data => ws.readyState === 1 && ws.send(data));
+  </script>
+</body>
+</html>
