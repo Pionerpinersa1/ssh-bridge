@@ -1,0 +1,22 @@
+name: bridge-runner
+
+on:
+  schedule:
+    - cron: '0 0,5,10,15,20 * * *'
+    - cron: '30 2,7,12,17,22 * * *'
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run bridge connector
+        run: timeout 20700 node muse-dial.js || true
