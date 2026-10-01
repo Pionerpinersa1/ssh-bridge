@@ -5,6 +5,7 @@ const crypto = require('crypto');
 
 const PORT = 5000;
 const DIR = __dirname;
+const TOKEN = process.env.BRIDGE_TOKEN || 'A3RDf9BoP2m0CQ2c';
 
 function serveFile(res, filePath) {
   const ext = path.extname(filePath);
@@ -113,9 +114,15 @@ const server = http.createServer((req, res) => {
 
 server.on('upgrade', (req, socket) => {
   if ((req.headers['upgrade'] || '').toLowerCase() !== 'websocket') { socket.destroy(); return; }
-  wsHandshake(req, socket);
-  if (req.url === '/machine') attachMachine(socket);
-  else attachBrowser(socket);
+  const url = new URL(req.url, 'http://x');
+  if (req.url === '/machine') {
+    wsHandshake(req, socket);
+    attachMachine(socket);
+  } else {
+    if (url.searchParams.get('token') !== TOKEN) { socket.write('HTTP/1.1 403 Forbidden\r\n\r\n'); socket.destroy(); return; }
+    wsHandshake(req, socket);
+    attachBrowser(socket);
+  }
 });
 
 server.listen(PORT, '0.0.0.0', () => console.log('[bridge] listening on :' + PORT));

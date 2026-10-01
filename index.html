@@ -25,11 +25,17 @@
     window.addEventListener('resize', () => fitAddon.fit());
 
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const ws = new WebSocket(`${proto}://${location.host}/browser`);
+    let token = localStorage.getItem('bridge_token') || '';
+    if (!token) { token = prompt('Bridge password:') || ''; localStorage.setItem('bridge_token', token); }
+    const ws = new WebSocket(`${proto}://${location.host}/browser?token=${encodeURIComponent(token)}`);
     const status = document.getElementById('status');
 
     ws.onopen = () => { status.textContent = 'connected'; status.style.color = '#0f0'; };
-    ws.onclose = () => { status.textContent = 'disconnected'; status.style.color = '#f00'; };
+    ws.onclose = e => {
+      status.style.color = '#f00';
+      if (e.code === 1006) { localStorage.removeItem('bridge_token'); status.textContent = 'wrong password — reload'; }
+      else status.textContent = 'disconnected';
+    };
     ws.onmessage = e => term.write(typeof e.data === 'string' ? e.data : new Uint8Array(e.data));
 
     term.onData(data => ws.readyState === 1 && ws.send(data));
