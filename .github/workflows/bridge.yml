@@ -23,15 +23,29 @@ jobs:
           node index.js &
           sleep 2
 
-      - name: Start serveo tunnel
+      - name: Start cloudflare tunnel and publish URL
         run: |
-          ssh -o StrictHostKeyChecking=no \
-              -o ServerAliveInterval=30 \
-              -o ExitOnForwardFailure=yes \
-              -R sshbridgexgnj:80:localhost:5000 \
-              serveo.net &
-          sleep 5
-          echo "Tunnel started — https://sshbridgexgnj.serveo.net"
+          # install cloudflared
+          curl -sL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared
+          chmod +x /usr/local/bin/cloudflared
+          # start tunnel, capture URL
+          cloudflared tunnel --url http://localhost:5000 --no-autoupdate 2>&1 | \
+            grep -o 'https://[a-z0-9-]*.trycloudflare.com' | head -1 | \
+            tee /tmp/tunnel_url.txt &
+          # wait for URL to appear
+          for i in $(seq 1 30); do
+            if [ -s /tmp/tunnel_url.txt ]; then break; fi
+            sleep 2
+          done
+          TUNNEL_URL=$(cat /tmp/tunnel_url.txt)
+          echo "Tunnel: $TUNNEL_URL"
+          # write URL to repo so browser knows where to connect
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          echo "$TUNNEL_URL" > TUNNEL_URL.txt
+          git add TUNNEL_URL.txt
+          git commit -m "chore: update tunnel URL [skip ci]" || true
+          git push || true
 
       - name: Run bridge connector
         run: timeout 20700 node muse-dial-local.js || true
