@@ -18,5 +18,20 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Start bridge server
+        run: |
+          node index.js &
+          sleep 2
+
+      - name: Start serveo tunnel
+        run: |
+          ssh -o StrictHostKeyChecking=no \
+              -o ServerAliveInterval=30 \
+              -o ExitOnForwardFailure=yes \
+              -R sshbridgexgnj:80:localhost:5000 \
+              serveo.net &
+          sleep 5
+          echo "Tunnel started — https://sshbridgexgnj.serveo.net"
+
       - name: Run bridge connector
-        run: timeout 20700 node muse-dial.js || true
+        run: timeout 20700 node muse-dial-local.js || true
