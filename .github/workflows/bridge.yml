@@ -6,6 +6,9 @@ on:
     - cron: '30 2,7,12,17,22 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   run:
     runs-on: ubuntu-latest
@@ -28,24 +31,29 @@ jobs:
           # install cloudflared
           curl -sL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared
           chmod +x /usr/local/bin/cloudflared
-          # start tunnel, capture URL
-          cloudflared tunnel --url http://localhost:5000 --no-autoupdate 2>&1 | \
-            grep -o 'https://[a-z0-9-]*.trycloudflare.com' | head -1 | \
-            tee /tmp/tunnel_url.txt &
-          # wait for URL to appear
-          for i in $(seq 1 30); do
-            if [ -s /tmp/tunnel_url.txt ]; then break; fi
+          # start tunnel, log to file
+          cloudflared tunnel --url http://localhost:5000 --no-autoupdate --logfile /tmp/cf.log 2>&1 &
+          CF_PID=$!
+          # wait for URL to appear in log
+          TUNNEL_URL=""
+          for i in $(seq 1 40); do
+            TUNNEL_URL=$(grep -oP 'https://[a-z0-9-]+\.trycloudflare\.com' /tmp/cf.log 2>/dev/null | head -1)
+            if [ -n "$TUNNEL_URL" ]; then break; fi
             sleep 2
           done
-          TUNNEL_URL=$(cat /tmp/tunnel_url.txt)
-          echo "Tunnel: $TUNNEL_URL"
+          echo "Tunnel URL: $TUNNEL_URL"
+          if [ -z "$TUNNEL_URL" ]; then
+            echo "=== cloudflared log ==="
+            cat /tmp/cf.log || true
+            exit 1
+          fi
           # write URL to repo so browser knows where to connect
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
           echo "$TUNNEL_URL" > TUNNEL_URL.txt
           git add TUNNEL_URL.txt
-          git commit -m "chore: update tunnel URL [skip ci]" || true
-          git push || true
+          git commit -m "chore: update tunnel URL [skip ci]"
+          git push
 
       - name: Run bridge connector
         run: timeout 20700 node muse-dial-local.js || true
